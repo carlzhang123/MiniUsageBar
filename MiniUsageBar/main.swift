@@ -533,6 +533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isFetching = false
     private var fiveHourMenuItem: NSMenuItem!
     private var weeklyMenuItem: NSMenuItem!
+    private var aboutPanel: NSPanel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -565,14 +566,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let refreshItem = NSMenuItem(title: "立即刷新", action: #selector(refresh), keyEquivalent: "r")
         refreshItem.target = self
         menu.addItem(refreshItem)
+        menu.addItem(.separator())
+        let aboutItem = NSMenuItem(title: "关于 Mini 用量条", action: #selector(showAbout), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
         menu.addItem(NSMenuItem(title: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
+    }
+
+    @objc private func showAbout() {
+        // Wait for menu tracking to finish before bringing the panel forward.
+        DispatchQueue.main.async { [weak self] in
+            self?.presentAboutPanel()
+        }
+    }
+
+    private func presentAboutPanel() {
+        if aboutPanel == nil {
+            let panel = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 340, height: 190),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            panel.title = "关于 Mini 用量条"
+            panel.isReleasedWhenClosed = false
+            panel.hidesOnDeactivate = false
+            panel.level = .floating
+            panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+
+            let title = NSTextField(labelWithString: "Mini 用量条")
+            title.font = .boldSystemFont(ofSize: 20)
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+            let versionLabel = NSTextField(labelWithString: "版本 \(version)")
+            versionLabel.textColor = .secondaryLabelColor
+            let developer = NSTextField(labelWithString: "开发者：Carl Zhang")
+            let github = NSButton(title: "github.com/carlzhang123", target: self, action: #selector(openDeveloperGitHub))
+            github.bezelStyle = .rounded
+
+            let stack = NSStackView(views: [title, versionLabel, developer, github])
+            stack.orientation = .vertical
+            stack.alignment = .centerX
+            stack.spacing = 12
+            stack.translatesAutoresizingMaskIntoConstraints = false
+            if let contentView = panel.contentView {
+                contentView.addSubview(stack)
+                NSLayoutConstraint.activate([
+                    stack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                    stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+                    stack.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 20),
+                    stack.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -20)
+                ])
+            }
+            aboutPanel = panel
+        }
+
+        guard let aboutPanel else { return }
+        if !aboutPanel.isVisible {
+            aboutPanel.center()
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        aboutPanel.makeKeyAndOrderFront(nil)
+        aboutPanel.orderFrontRegardless()
+    }
+
+    @objc private func openDeveloperGitHub() {
+        guard let url = URL(string: "https://github.com/carlzhang123") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func refresh() {
         guard !isFetching else { return }
         isFetching = true
-        meterView.update(primary: nil, secondary: nil)
         service.fetch { [weak self] result in
             guard let self else { return }
             self.isFetching = false

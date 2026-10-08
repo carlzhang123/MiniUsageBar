@@ -56,6 +56,12 @@
 - 自动刷新间隔：搜索 `withTimeInterval: 60`，菜单栏逻辑位于 `AppDelegate` 中。
 - 菜单栏图标：替换 `MiniUsageBar/MenuBarKnot.png`，建议使用透明背景。图片按模板图像显示，颜色由系统外观和选中状态决定。
 
+## 开发者
+
+[Carl Zhang](https://github.com/carlzhang123)
+
+也可从应用菜单中的“关于 Mini 用量条”查看开发者信息和 GitHub 链接。
+
 ## 许可与素材
 
 本项目源码采用 GNU Affero General Public License v3.0（AGPL-3.0-only）许可，完整条款见 [LICENSE](LICENSE)。
