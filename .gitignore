@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Xcode build products and personal settings
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcarchive
+*.dSYM/
+
+# Local environment files and credentials
+.env
+.env.*
+!.env.example
+.codex/
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
