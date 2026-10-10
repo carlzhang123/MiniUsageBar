@@ -50,9 +50,8 @@
 主要代码位于 `MiniUsageBar/main.swift`：
 
 - 字体大小：搜索 `monospacedDigitSystemFont(ofSize: 9`。
-- 两行间距：搜索 `labels.spacing = -2`。
-- 垂直位置：搜索 `labels.centerYAnchor`。
-- 状态栏宽度：同时检查 `statusItem(withLength: 72)` 和 `MenuBarMeterView` 的宽度约束。
+- 两行间距和垂直位置：调整 `MenuBarMeter.render` 中两行文字的绘制坐标。
+- 状态栏宽度：检查 `statusItem(withLength: 72)` 和 `MenuBarMeter.render` 中的图片尺寸。
 - 自动刷新间隔：搜索 `withTimeInterval: 60`，菜单栏逻辑位于 `AppDelegate` 中。
 - 菜单栏图标：替换 `MiniUsageBar/MenuBarKnot.png`，建议使用透明背景。图片按模板图像显示，颜色由系统外观和选中状态决定。
 

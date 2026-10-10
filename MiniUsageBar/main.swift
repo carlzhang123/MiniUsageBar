@@ -445,90 +445,59 @@ final class OverlayController: NSObject, NSWindowDelegate {
     }
 }
 
-final class MenuBarMeterView: NSView {
-    private let iconView = NSImageView()
-    private let fiveHourLabel = NSTextField(labelWithString: "5h: …")
-    private let weeklyLabel = NSTextField(labelWithString: "1w: …")
+final class MenuBarMeter {
+    private weak var button: NSStatusBarButton?
+    private let icon: NSImage?
+    private var displayedText: String?
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        translatesAutoresizingMaskIntoConstraints = false
-
-        if let imageURL = Bundle.main.url(forResource: "MenuBarKnot", withExtension: "png"),
-           let image = NSImage(contentsOf: imageURL) {
-            image.isTemplate = true
-            iconView.image = image
+    init(button: NSStatusBarButton) {
+        self.button = button
+        if let url = Bundle.main.url(forResource: "MenuBarKnot", withExtension: "png") {
+            icon = NSImage(contentsOf: url)
         } else {
-            iconView.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Codex")
+            icon = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Codex")
         }
-        iconView.imageScaling = .scaleProportionallyDown
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-
-        [fiveHourLabel, weeklyLabel].forEach { label in
-            label.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
-            label.alignment = .left
-            label.translatesAutoresizingMaskIntoConstraints = false
-        }
-
-        let labels = NSStackView(views: [fiveHourLabel, weeklyLabel])
-        labels.orientation = .vertical
-        labels.alignment = .leading
-        labels.spacing = -2
-        labels.translatesAutoresizingMaskIntoConstraints = false
-
-        addSubview(iconView)
-        addSubview(labels)
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 72),
-            heightAnchor.constraint(equalToConstant: 22),
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 16),
-            iconView.heightAnchor.constraint(equalToConstant: 16),
-            labels.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 3),
-            labels.centerYAnchor.constraint(equalTo: centerYAnchor),
-            labels.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -1)
-        ])
-        updateTint()
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    override func viewWillDraw() {
-        updateTint()
-        super.viewWillDraw()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        updateTint()
+        button.imagePosition = .imageOnly
+        update(primary: nil, secondary: nil)
     }
 
     func update(primary: Double?, secondary: Double?) {
-        fiveHourLabel.stringValue = primary.map { "5h: \(Int($0.rounded()))%" } ?? "5h: …"
-        weeklyLabel.stringValue = secondary.map { "1w: \(Int($0.rounded()))%" } ?? "1w: …"
+        let primaryText = primary.map { "\(Int($0.rounded()))%" } ?? "…"
+        let secondaryText = secondary.map { "\(Int($0.rounded()))%" } ?? "…"
+        render(primary: primaryText, secondary: secondaryText)
     }
 
     func showError() {
-        fiveHourLabel.stringValue = "5h: --%"
-        weeklyLabel.stringValue = "1w: --%"
+        render(primary: "--%", secondary: "--%")
     }
 
-    private func updateTint() {
-        let isHighlighted = (superview as? NSButton)?.cell?.isHighlighted == true
-        let color: NSColor = isHighlighted ? .selectedMenuItemTextColor : .controlTextColor
-        iconView.contentTintColor = color
-        fiveHourLabel.textColor = color
-        weeklyLabel.textColor = color
+    private func render(primary: String, secondary: String) {
+        let text = "\(primary)|\(secondary)"
+        guard text != displayedText, let button else { return }
+        let size = NSSize(width: 64, height: 22)
+        let image = NSImage(size: size)
+        // Rasterize once per value change; the native button handles appearance
+        // and selection without snapshotting a custom hierarchy of subviews.
+        image.lockFocus()
+        icon?.draw(in: NSRect(x: 0, y: 3, width: 16, height: 16))
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold),
+            .foregroundColor: NSColor.black
+        ]
+        ("5h: \(primary)" as NSString).draw(at: NSPoint(x: 19, y: 10), withAttributes: attributes)
+        ("1w: \(secondary)" as NSString).draw(at: NSPoint(x: 19, y: 0), withAttributes: attributes)
+        image.unlockFocus()
+        image.isTemplate = true
+        button.image = image
+        button.setAccessibilityLabel("Codex 剩余用量，5 小时：\(primary)，每周：\(secondary)")
+        displayedText = text
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let service = UsageService()
     private var statusItem: NSStatusItem!
-    private var meterView: MenuBarMeterView!
+    private var meterView: MenuBarMeter!
     private var timer: Timer?
     private var isFetching = false
     private var fiveHourMenuItem: NSMenuItem!
@@ -546,15 +515,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: 72)
         guard let button = statusItem.button else { return }
         button.title = ""
-        button.image = nil
-        meterView = MenuBarMeterView(frame: NSRect(x: 0, y: 0, width: 72, height: 22))
-        button.addSubview(meterView)
-        NSLayoutConstraint.activate([
-            meterView.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-            meterView.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-            meterView.topAnchor.constraint(equalTo: button.topAnchor),
-            meterView.bottomAnchor.constraint(equalTo: button.bottomAnchor)
-        ])
+        meterView = MenuBarMeter(button: button)
         button.toolTip = "Codex 剩余用量"
 
         let menu = NSMenu()
