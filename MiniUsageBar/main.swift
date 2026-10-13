@@ -12,8 +12,8 @@ struct UsageWindow {
 }
 
 struct UsageSnapshot {
-    let primary: UsageWindow
-    let secondary: UsageWindow
+    let fiveHour: UsageWindow?
+    let weekly: UsageWindow?
     let fetchedAt: Date
 }
 
@@ -165,19 +165,24 @@ final class UsageService {
             throw UsageError.malformedResponse
         }
 
+        return try parseSnapshot(result: result)
+    }
+
+    func parseSnapshot(result: [String: Any]) throws -> UsageSnapshot {
         let bucket: [String: Any]?
         if let buckets = result["rateLimitsByLimitId"] as? [String: Any] {
-            bucket = (buckets["codex"] as? [String: Any]) ?? buckets.values.compactMap { $0 as? [String: Any] }.first
+            bucket = (buckets["codex"] as? [String: Any]) ?? (result["rateLimits"] as? [String: Any])
         } else {
             bucket = result["rateLimits"] as? [String: Any]
         }
 
-        guard let bucket,
-              let primary = parseWindow(bucket["primary"]),
-              let secondary = parseWindow(bucket["secondary"]) else {
-            throw UsageError.malformedResponse
-        }
-        return UsageSnapshot(primary: primary, secondary: secondary, fetchedAt: Date())
+        guard let bucket else { throw UsageError.malformedResponse }
+        // Slot names do not identify the period: weekly-only accounts use primary.
+        let windows = [parseWindow(bucket["primary"]), parseWindow(bucket["secondary"])].compactMap { $0 }
+        let fiveHour = windows.first { $0.windowMinutes == 300 }
+        let weekly = windows.first { $0.windowMinutes == 10080 }
+        guard fiveHour != nil || weekly != nil else { throw UsageError.malformedResponse }
+        return UsageSnapshot(fiveHour: fiveHour, weekly: weekly, fetchedAt: Date())
     }
 
     private func parseWindow(_ value: Any?) -> UsageWindow? {
@@ -348,7 +353,7 @@ final class OverlayContentView: NSVisualEffectView {
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 11),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -10)
         ])
     }
 
@@ -362,8 +367,10 @@ final class OverlayContentView: NSVisualEffectView {
     }
 
     func show(snapshot: UsageSnapshot) {
-        fiveHourRow.update(window: snapshot.primary)
-        weeklyRow.update(window: snapshot.secondary)
+        fiveHourRow.isHidden = snapshot.fiveHour == nil
+        weeklyRow.isHidden = snapshot.weekly == nil
+        if let window = snapshot.fiveHour { fiveHourRow.update(window: window) }
+        if let window = snapshot.weekly { weeklyRow.update(window: window) }
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         statusLabel.stringValue = "更新于 \(formatter.string(from: snapshot.fetchedAt))"
@@ -458,12 +465,12 @@ final class MenuBarMeter {
             icon = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Codex")
         }
         button.imagePosition = .imageOnly
-        update(primary: nil, secondary: nil)
+        render(primary: "…", secondary: "…")
     }
 
     func update(primary: Double?, secondary: Double?) {
-        let primaryText = primary.map { "\(Int($0.rounded()))%" } ?? "…"
-        let secondaryText = secondary.map { "\(Int($0.rounded()))%" } ?? "…"
+        let primaryText = primary.map { "\(Int($0.rounded()))%" }
+        let secondaryText = secondary.map { "\(Int($0.rounded()))%" }
         render(primary: primaryText, secondary: secondaryText)
     }
 
@@ -471,8 +478,8 @@ final class MenuBarMeter {
         render(primary: "--%", secondary: "--%")
     }
 
-    private func render(primary: String, secondary: String) {
-        let text = "\(primary)|\(secondary)"
+    private func render(primary: String?, secondary: String?) {
+        let text = "\(primary ?? "")|\(secondary ?? "")"
         guard text != displayedText, let button else { return }
         let size = NSSize(width: 64, height: 22)
         let image = NSImage(size: size)
@@ -484,12 +491,17 @@ final class MenuBarMeter {
             .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold),
             .foregroundColor: NSColor.black
         ]
-        ("5h: \(primary)" as NSString).draw(at: NSPoint(x: 19, y: 10), withAttributes: attributes)
-        ("1w: \(secondary)" as NSString).draw(at: NSPoint(x: 19, y: 0), withAttributes: attributes)
+        if let primary {
+            ("5h: \(primary)" as NSString).draw(at: NSPoint(x: 19, y: secondary == nil ? 5 : 10), withAttributes: attributes)
+        }
+        if let secondary {
+            ("1w: \(secondary)" as NSString).draw(at: NSPoint(x: 19, y: primary == nil ? 5 : 0), withAttributes: attributes)
+        }
         image.unlockFocus()
         image.isTemplate = true
         button.image = image
-        button.setAccessibilityLabel("Codex 剩余用量，5 小时：\(primary)，每周：\(secondary)")
+        let descriptions = [primary.map { "5 小时：\($0)" }, secondary.map { "每周：\($0)" }].compactMap { $0 }
+        button.setAccessibilityLabel("Codex 剩余用量，" + descriptions.joined(separator: "，"))
         displayedText = text
     }
 }
@@ -604,12 +616,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.isFetching = false
             switch result {
             case .success(let snapshot):
-                self.meterView.update(primary: snapshot.primary.remainingPercent, secondary: snapshot.secondary.remainingPercent)
-                self.fiveHourMenuItem.title = self.menuDescription(prefix: "5 小时剩余", window: snapshot.primary)
-                self.weeklyMenuItem.title = self.menuDescription(prefix: "每周剩余", window: snapshot.secondary)
+                self.meterView.update(primary: snapshot.fiveHour?.remainingPercent, secondary: snapshot.weekly?.remainingPercent)
+                self.fiveHourMenuItem.isHidden = snapshot.fiveHour == nil
+                self.weeklyMenuItem.isHidden = snapshot.weekly == nil
+                if let window = snapshot.fiveHour {
+                    self.fiveHourMenuItem.title = self.menuDescription(prefix: "5 小时剩余", window: window)
+                }
+                if let window = snapshot.weekly {
+                    self.weeklyMenuItem.title = self.menuDescription(prefix: "每周剩余", window: window)
+                }
                 self.statusItem.button?.toolTip = "Codex 剩余用量 · 更新于 \(self.shortTime(snapshot.fetchedAt))"
             case .failure(let error):
                 self.meterView.showError()
+                self.fiveHourMenuItem.isHidden = false
+                self.weeklyMenuItem.isHidden = false
                 self.fiveHourMenuItem.title = "读取失败：\(error.localizedDescription)"
                 self.weeklyMenuItem.title = "请确认 ChatGPT 已登录"
                 self.statusItem.button?.toolTip = error.localizedDescription
