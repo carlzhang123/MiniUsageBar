@@ -481,7 +481,8 @@ final class MenuBarMeter {
     private func render(primary: String?, secondary: String?) {
         let text = "\(primary ?? "")|\(secondary ?? "")"
         guard text != displayedText, let button else { return }
-        let size = NSSize(width: 64, height: 22)
+        // Leave room for both three-digit percentages and trailing padding.
+        let size = NSSize(width: 70, height: 22)
         let image = NSImage(size: size)
         // Rasterize once per value change; the native button handles appearance
         // and selection without snapshotting a custom hierarchy of subviews.
@@ -524,7 +525,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: 72)
+        statusItem = NSStatusBar.system.statusItem(withLength: 82)
         guard let button = statusItem.button else { return }
         button.title = ""
         meterView = MenuBarMeter(button: button)
