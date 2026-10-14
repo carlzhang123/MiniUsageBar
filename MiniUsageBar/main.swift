@@ -1,3 +1,10 @@
+// MiniUsageBar — Mini 用量条
+// Copyright (c) 2026 carlzhang (Carl Zhang)
+// SPDX-License-Identifier: AGPL-3.0-only
+// Author: carlzhang (https://github.com/carlzhang123)
+// Source: https://github.com/carlzhang123/MiniUsageBar
+// See LICENSE in the repository root for the full license terms.
+
 import AppKit
 import Foundation
 

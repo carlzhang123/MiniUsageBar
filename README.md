@@ -68,7 +68,11 @@
 
 ## 开发者
 
-[Carl Zhang](https://github.com/carlzhang123)
+[carlzhang（Carl Zhang）](https://github.com/carlzhang123)
+
+Copyright (c) 2026 carlzhang (Carl Zhang)。
+
+项目源码：[carlzhang123/MiniUsageBar](https://github.com/carlzhang123/MiniUsageBar)。作者信息见 [AUTHORS.md](AUTHORS.md)。
 
 也可从应用菜单中的“关于 Mini 用量条”查看开发者信息和 GitHub 链接。
 
